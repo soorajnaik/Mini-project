@@ -1,0 +1,64 @@
+#include <ESP8266WiFi.h>
+#include <UbidotsESPMQTT.h>
+
+#define WIFI_SSID "your_wifi_ssid"
+#define WIFI_PASSWORD "your_wifi_password"
+#define UBIDOTS_TOKEN "your_ubidots_token"
+#define DEVICE_LABEL "ecg_device" // Change to your device label
+#define VARIABLE_LABEL "ecg_data" // Change to your variable label
+
+#define ECG_SENSOR_PIN A0 // Analog pin connected to AD8232 OUT pin
+
+const int numReadings = 10; // Number of readings to average
+int readings[numReadings];   // Store the readings from the analog input
+int index = 0;               // Index of the current reading
+long total = 0;              // Running total of the readings
+int average = 0;             // Average of the readings
+
+WiFiClient client;
+Ubidots client_ubidots(UBIDOTS_TOKEN, client);
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(ECG_SENSOR_PIN, INPUT);
+
+  connectWiFi();
+}
+
+void loop() {
+  // Read ECG data
+  int ecgValue = readECG();
+
+  // Send ECG data to Ubidots
+  client_ubidots.add(VARIABLE_LABEL, ecgValue);
+  client_ubidots.sendAll();
+
+  delay(1000); // Adjust delay as needed
+}
+
+int readECG() {
+  total = total - readings[index];
+  readings[index] = analogRead(ECG_SENSOR_PIN);
+  total = total + readings[index];
+  index = (index + 1) % numReadings;
+  average = total / numReadings;
+  return average;
+}
+
+void connectWiFi() {
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(WIFI_SSID);
+
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+}
